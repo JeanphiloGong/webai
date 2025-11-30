@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import Depends, HTTPException, Header, APIRouter, status
 from sqlalchemy.orm import Session
 from starlette.status import HTTP_401_UNAUTHORIZED
@@ -8,6 +10,8 @@ from routers.schemas.login import AuthResponse, LoginRequest, RegisterRequest, U
 from utils.auth import create_access_token, decode_access_token, get_password_hash, verify_password
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 INITIAL_SIGNUP_BOUNS = 1000
 
@@ -16,44 +20,50 @@ def get_current_user(
         authorization: str | None = Header(default=None, alias="Authorization"),
         ) -> User:
     if not authorization:
+        logger.warning("Unauthorized access: missing Authorization header")
         raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="not authenticated",
                 )
-        scheme, _, token = authorization.partition(" ")
-        if scheme.lower() != "bearer" or not token:
-            raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="invalid authorization header",
-                    )
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token:
+        logger.warning("Unauthorized access: invalid auth scheme or token missing")
+        raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="invalid authorization header",
+                )
 
 
-        try:
-            payload = decode_access_token(token)
-        except ValueError:
-            raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid or expired token",
-                    )
+    try:
+        payload = decode_access_token(token)
+    except ValueError:
+        logger.warning("Unauthorized access: invalid or expired token")
+        raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired token",
+                )
 
-        user_id_str = str(payload.get("sub", ""))
-        if not user_id_str.isdigit():
-            raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    defail="Invalid token payload",
-                    )
+    user_id_str = str(payload.get("sub", ""))
+    if not user_id_str.isdigit():
+        logger.warning("Unauthorized access: token payload missing numeric sub")
+        raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token payload",
+                )
 
-        user = db.query(User).filter(User.id == int(user_id_str)).first()
-        if not user:
-            raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="User not found",
-                    )
-        return user
+    user = db.query(User).filter(User.id == int(user_id_str)).first()
+    if not user:
+        logger.warning("Unauthorized access: user not found for token sub=%s", user_id_str)
+        raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found",
+                )
+    return user
 
 
 @router.post("/api/auth/register", response_model=AuthResponse)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)):
+    logger.info("Register request received: email=%s phone=%s", payload.email, payload.phone)
     if not payload.email and not payload.phone:
         raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -102,6 +112,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     db.refresh(user)
 
     token = create_access_token({"sub": str(user.id)})
+    logger.info("Register success: user_id=%s", user.id)
     return AuthResponse(user=user, token=token)
 
 
@@ -110,8 +121,8 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
 #############################
 @router.post("/api/auth/login", response_model=AuthResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
+    logger.info("Login attempt: identifier=%s", payload.identifier)
     identifier = payload.identifier
-
     user = (
             db.query(User)
             .filter(
@@ -121,18 +132,21 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
             )
     
     if not user or not verify_password(payload.password, user.password_hash):
+        logger.warning("Login failed: identifier=%s", identifier)
         raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="帐号或者密码错误",
                 )
 
     if not user.is_activate:
+        logger.warning("Login denied (disabled): user_id=%s", user.id)
         raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="用户已被禁用",
                 )
     token = create_access_token({"sub": str(user.id)})
 
+    logger.info("Login success: user_id=%s", user.id)
     return AuthResponse(user=user, token=token)
 
 #####################
@@ -140,4 +154,5 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 #######################
 @router.get("/api/auth/me", response_model=UserOut)
 def get_me(current_user: User = Depends(get_current_user)):
+    logger.info("Fetched current user: user_id=%s", current_user.id)
     return current_user

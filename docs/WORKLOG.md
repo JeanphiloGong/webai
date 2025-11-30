@@ -21,13 +21,13 @@
      - [x] `ai_requests`
 
 2. 用户基础能力
-   - [ ] 实现注册接口 `POST /api/auth/register`：
+   - [x] 实现注册接口 `POST /api/auth/register`：
      - 创建用户记录（邮箱/手机号 + 密码哈希）。
      - 初始化用户 `balance` 为 0。
      - 发放「初始赠币」（例如 1000），写入一条 `transactions`（type=`reward`，reason=`signup_bonus`）。
-   - [ ] 实现登录接口 `POST /api/auth/login`：
+   - [x] 实现登录接口 `POST /api/auth/login`：
      - 校验账号密码，返回 Token（JWT 或等价方案）。
-   - [ ] 实现当前用户接口 `GET /api/auth/me`：
+   - [x] 实现当前用户接口 `GET /api/auth/me`：
      - 根据 Token 返回当前用户信息（可包含余额快照）。
 
 3. 链下游戏币基础能力

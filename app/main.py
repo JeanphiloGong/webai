@@ -1,9 +1,18 @@
+import logging
+
 from fastapi import Depends, FastAPI
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from internal.db_init import get_db
 
 from routers import user
+
+# Configure application-level logging early so uvicorn picks it up
+logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+        )
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
         title="GameCoin Platform"

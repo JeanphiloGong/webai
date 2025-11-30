@@ -20,7 +20,7 @@ class UserOut(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     balance: int
-    is_active: bool
+    is_activate: bool
 
     model_config = ConfigDict(from_attributes=True)
 
